@@ -1,0 +1,48 @@
+# Configurações padrão para modelos
+models:
+  # Configurações para modelos LLaMA
+  llama:
+    model_type: "llama"
+    tokenizer_type: "llama"
+    max_length: 2048
+    pad_token: "<pad>"
+    eos_token: "</s>"
+    bos_token: "<s>"
+    unk_token: "<unk>"
+    
+  # Configurações para modelos Mistral
+  mistral:
+    model_type: "mistral"
+    tokenizer_type: "mistral"
+    max_length: 4096
+    pad_token: "<pad>"
+    eos_token: "</s>"
+    bos_token: "<s>"
+    unk_token: "<unk>"
+    
+  # Configurações para modelos GPT
+  gpt:
+    model_type: "gpt"
+    tokenizer_type: "gpt2"
+    max_length: 1024
+    pad_token: "<|endoftext|>"
+    eos_token: "<|endoftext|>"
+    bos_token: "<|endoftext|>"
+    unk_token: "<|endoftext|>"
+
+# Configurações de LoRA
+lora:
+  r: 8
+  lora_alpha: 32
+  lora_dropout: 0.1
+  target_modules: ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Configurações de QLoRA
+qlora:
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: "float16"
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+

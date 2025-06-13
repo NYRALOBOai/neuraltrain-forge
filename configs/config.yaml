@@ -1,0 +1,46 @@
+# Configuração principal do NeuralTrain Forge
+app:
+  name: "NeuralTrain Forge"
+  version: "1.0.0"
+  debug: false
+  
+# Configurações de diretórios
+directories:
+  models: "data/models"
+  datasets: "data/datasets"
+  outputs: "data/outputs"
+  logs: "logs"
+  configs: "configs"
+
+# Configurações de upload
+upload:
+  max_file_size_mb: 1000  # 1GB
+  allowed_model_formats: [".gguf", ".bin", ".safetensors"]
+  allowed_dataset_formats: [".txt", ".jsonl", ".csv", ".parquet"]
+  allowed_config_formats: [".yaml", ".yml", ".json"]
+
+# Configurações de treinamento
+training:
+  default_batch_size: 4
+  default_learning_rate: 0.0002
+  default_epochs: 3
+  default_warmup_steps: 100
+  save_steps: 500
+  eval_steps: 500
+  logging_steps: 10
+  
+# Configurações de hardware
+hardware:
+  use_gpu: true
+  mixed_precision: "fp16"
+  gradient_checkpointing: true
+  dataloader_num_workers: 4
+
+# Configurações de logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/neuraltrain.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+

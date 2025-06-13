@@ -1,0 +1,77 @@
+# Configurações de treinamento
+training:
+  # Configurações básicas
+  output_dir: "data/outputs"
+  overwrite_output_dir: true
+  do_train: true
+  do_eval: true
+  
+  # Configurações de dados
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 1
+  eval_accumulation_steps: 1
+  
+  # Configurações de otimização
+  learning_rate: 0.0002
+  weight_decay: 0.01
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1e-8
+  max_grad_norm: 1.0
+  
+  # Configurações de scheduler
+  num_train_epochs: 3
+  max_steps: -1
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  warmup_steps: 0
+  
+  # Configurações de logging e salvamento
+  logging_dir: "logs"
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 3
+  evaluation_strategy: "steps"
+  eval_steps: 500
+  
+  # Configurações de hardware
+  fp16: true
+  bf16: false
+  gradient_checkpointing: true
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+  
+  # Configurações de early stopping
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  
+  # Configurações específicas para fine-tuning
+  group_by_length: true
+  length_column_name: "length"
+  report_to: []
+
+# Presets de configuração
+presets:
+  quick_test:
+    num_train_epochs: 1
+    max_steps: 100
+    save_steps: 50
+    eval_steps: 50
+    logging_steps: 5
+    
+  standard:
+    num_train_epochs: 3
+    save_steps: 500
+    eval_steps: 500
+    logging_steps: 10
+    
+  intensive:
+    num_train_epochs: 5
+    save_steps: 250
+    eval_steps: 250
+    logging_steps: 5
+    gradient_accumulation_steps: 2
+
