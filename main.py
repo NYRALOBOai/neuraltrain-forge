@@ -18,7 +18,7 @@ if str(src_dir) not in sys.path:
 
 # Importa componentes da UI
 from ui.components import sidebar
-from ui.pages import home, model_upload, dataset_upload, training, results
+from ui.pages import home, model_upload, dataset_upload, training, results, chat
 
 
 def main():
@@ -163,6 +163,8 @@ def main():
         dataset_upload.render()
     elif page == 'training':
         training.render()
+    elif page == 'chat':
+        chat.main()
     elif page == 'results':
         results.render()
     else:

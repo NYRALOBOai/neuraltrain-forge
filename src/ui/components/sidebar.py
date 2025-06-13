@@ -37,6 +37,10 @@ def render():
             st.session_state.page = "training"
             st.rerun()
         
+        if st.button("💬 Chat & Teste", use_container_width=True):
+            st.session_state.page = "chat"
+            st.rerun()
+        
         if st.button("📈 Resultados", use_container_width=True):
             st.session_state.page = "results"
             st.rerun()
