@@ -8,6 +8,40 @@ import streamlit as st
 from typing import Dict, Any
 
 
+def render_sidebar():
+    """Renderiza a sidebar com navegação e informações do sistema."""
+    
+    # Menu de navegação
+    st.sidebar.markdown("# 🧠 NeuralTrain Forge")
+    st.sidebar.markdown("### Plataforma de Fine-tuning")
+    st.sidebar.markdown("---")
+    
+    # Navegação
+    st.sidebar.markdown("## 📋 Navegação")
+    
+    # Botões de navegação
+    if st.sidebar.button("🏠 Início", use_container_width=True):
+        return "Início"
+    
+    if st.sidebar.button("📤 Upload de Modelos", use_container_width=True):
+        return "Upload de Modelos"
+    
+    if st.sidebar.button("📊 Upload de Datasets", use_container_width=True):
+        return "Upload de Datasets"
+    
+    if st.sidebar.button("⚙️ Configuração de Treino", use_container_width=True):
+        return "Configuração de Treino"
+    
+    if st.sidebar.button("💬 Chat & Teste", use_container_width=True):
+        return "Chat & Teste"
+    
+    if st.sidebar.button("📈 Resultados", use_container_width=True):
+        return "Resultados"
+    
+    # Retorna a página atual se nenhum botão foi clicado
+    return st.session_state.get('current_page', 'Início')
+
+
 def render():
     """Renderiza a sidebar com navegação e informações do sistema."""
     
