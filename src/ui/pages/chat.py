@@ -59,7 +59,7 @@ def init_chat_manager():
 
 def render_model_selector():
     """Renderiza seletor de modelos"""
-    st.subheader("🧠 Seleção de Modelos")
+    st.subheader("🤖 Seleção de Modelos")
     
     chat_manager = st.session_state.chat_manager
     
@@ -70,16 +70,16 @@ def render_model_selector():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.write("***Modelos Disponíveis:***")
+        st.write("**Modelos Disponíveis:**")
         if available_models:
             for model in available_models:
-                status = "🟢 Carregado" if model['name'] in loaded_models else "🔴 Disponível"
+                status = "🟢 Carregado" if model['name'] in loaded_models else "⚪ Disponível"
                 st.write(f"- {model['name']} ({model['size']}) {status}")
         else:
             st.info("Nenhum modelo encontrado. Faça upload de modelos primeiro.")
     
     with col2:
-        st.write("***Carregar Modelo:***")
+        st.write("**Carregar Modelo:**")
         
         if available_models:
             model_to_load = st.selectbox(
@@ -113,7 +113,7 @@ def render_model_selector():
         
         # Descarregar modelos
         if loaded_models:
-            st.write("***Modelos Carregados:***")
+            st.write("**Modelos Carregados:**")
             model_to_unload = st.selectbox(
                 "Descarregar modelo:",
                 options=loaded_models,
@@ -121,13 +121,10 @@ def render_model_selector():
             )
             
             if st.button("🗑️ Descarregar", key="unload_model_btn"):
-                if model_to_unload:
-                    success = chat_manager.model_loader.unload_model(model_to_unload)
-                    if success:
-                        st.success(f"✅ Modelo {model_to_unload} descarregado!")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Erro ao descarregar modelo")
+                success = chat_manager.model_loader.unload_model(model_to_unload)
+                if success:
+                    st.success(f"✅ Modelo {model_to_unload} descarregado")
+                    st.rerun()
 
 def render_document_manager():
     """Renderiza gerenciador de documentos"""
@@ -136,77 +133,123 @@ def render_document_manager():
     doc_processor = st.session_state.document_processor
     
     # Tabs para diferentes funcionalidades
-    tab1, tab2, tab3 = st.tabs(["📤 Upload", "📋 Lista", "🔍 Busca"])
+    tab1, tab2, tab3 = st.tabs(["📤 Upload", "📋 Documentos", "🔍 Busca"])
     
     with tab1:
         st.write("**Upload de Documentos**")
-        uploaded_files = st.file_uploader(
-            "Selecione documentos",
-            type=['txt', 'pdf', 'md', 'json', 'csv'],
-            accept_multiple_files=True,
-            help="Formatos suportados: TXT, PDF, MD, JSON, CSV (sem limite de tamanho)"
+        
+        # Mostrar formatos suportados
+        supported_formats = doc_processor.get_supported_formats()
+        st.info(f"Formatos suportados: {', '.join(supported_formats)} (máximo 20MB)")
+        
+        # Upload de arquivo
+        uploaded_file = st.file_uploader(
+            "Escolha um arquivo:",
+            type=[fmt[1:] for fmt in supported_formats],  # Remove o ponto
+            help="Selecione um documento para processar"
         )
         
-        if uploaded_files:
-            for uploaded_file in uploaded_files:
-                if st.button(f"📤 Processar {uploaded_file.name}", key=f"process_{uploaded_file.name}"):
-                    with st.spinner(f"Processando {uploaded_file.name}..."):
-                        try:
-                            # Salvar arquivo temporariamente
-                            temp_path = f"/tmp/{uploaded_file.name}"
-                            with open(temp_path, "wb") as f:
-                                f.write(uploaded_file.getbuffer())
+        if uploaded_file is not None:
+            # Salvar arquivo temporariamente
+            temp_path = Path("data/temp") / uploaded_file.name
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write(f"**Arquivo:** {uploaded_file.name}")
+                st.write(f"**Tamanho:** {uploaded_file.size / 1024:.1f} KB")
+                st.write(f"**Tipo:** {uploaded_file.type}")
+            
+            with col2:
+                if st.button("🔄 Processar", key="process_doc"):
+                    with st.spinner("Processando documento..."):
+                        doc_info = doc_processor.process_document(temp_path)
+                        
+                        if doc_info:
+                            st.success(f"✅ Documento processado!")
+                            st.write(f"**Chunks criados:** {doc_info.total_chunks}")
+                            st.write(f"**Tokens totais:** {doc_info.total_tokens}")
                             
-                            # Processar documento
-                            doc_id = doc_processor.process_document(temp_path)
-                            
-                            if doc_id:
-                                st.success(f"✅ Documento {uploaded_file.name} processado com sucesso!")
-                                st.info(f"ID do documento: {doc_id}")
-                            else:
-                                st.error(f"❌ Erro ao processar {uploaded_file.name}")
-                                
-                        except Exception as e:
-                            st.error(f"❌ Erro: {str(e)}")
+                            # Limpar arquivo temporário
+                            temp_path.unlink(missing_ok=True)
+                            st.rerun()
+                        else:
+                            st.error("❌ Erro ao processar documento")
     
     with tab2:
         st.write("**Documentos Processados**")
+        
         documents = doc_processor.list_documents()
         
         if documents:
             for doc in documents:
-                with st.expander(f"📄 {doc['filename']} ({doc['size']} tokens)"):
-                    col1, col2 = st.columns([3, 1])
+                with st.expander(f"📄 {doc['filename']}", expanded=False):
+                    col1, col2, col3 = st.columns(3)
+                    
                     with col1:
-                        st.write(f"**Tipo:** {doc['type']}")
-                        st.write(f"**Processado em:** {doc['processed_at']}")
-                        st.write(f"**Chunks:** {doc['chunks']}")
-                        if doc['metadata']:
-                            st.write("**Metadados:**")
-                            st.json(doc['metadata'])
+                        st.write(f"**Tipo:** {doc['file_type']}")
+                        st.write(f"**Tamanho:** {doc['file_size'] / 1024:.1f} KB")
+                        st.write(f"**Processado:** {doc['processed_at'][:19]}")
                     
                     with col2:
-                        if st.button("🗑️ Remover", key=f"remove_{doc['id']}"):
-                            if doc_processor.remove_document(doc['id']):
+                        st.write(f"**Chunks:** {doc['total_chunks']}")
+                        st.write(f"**Tokens:** {doc['total_tokens']}")
+                        st.write(f"**Tokens/Chunk:** {doc['total_tokens'] // doc['total_chunks'] if doc['total_chunks'] > 0 else 0}")
+                    
+                    with col3:
+                        if st.button(f"🗑️ Remover", key=f"delete_{doc['id']}"):
+                            if doc_processor.delete_document(doc['id']):
                                 st.success("Documento removido!")
                                 st.rerun()
+                        
+                        if st.button(f"📊 Detalhes", key=f"details_{doc['id']}"):
+                            st.session_state.selected_document = doc['id']
+                            st.rerun()
         else:
             st.info("Nenhum documento processado ainda.")
     
     with tab3:
         st.write("**Busca em Documentos**")
-        search_query = st.text_input("Digite sua busca:", key="doc_search")
         
-        if search_query:
-            results = doc_processor.search_documents(search_query)
+        documents = doc_processor.list_documents()
+        
+        if documents:
+            # Seletor de documento
+            doc_options = {doc['filename']: doc['id'] for doc in documents}
+            selected_doc_name = st.selectbox(
+                "Documento:",
+                options=list(doc_options.keys()),
+                key="search_document"
+            )
             
-            if results:
-                st.write(f"**Encontrados {len(results)} resultados:**")
-                for i, result in enumerate(results):
-                    with st.expander(f"Resultado {i+1} - {result['filename']} (Score: {result['score']:.2f})"):
-                        st.write(result['content'])
-            else:
-                st.info("Nenhum resultado encontrado.")
+            if selected_doc_name:
+                selected_doc_id = doc_options[selected_doc_name]
+                
+                # Campo de busca
+                search_query = st.text_input(
+                    "Buscar no documento:",
+                    placeholder="Digite palavras-chave...",
+                    key="search_query"
+                )
+                
+                if search_query:
+                    results = doc_processor.search_in_document(selected_doc_id, search_query)
+                    
+                    if results:
+                        st.write(f"**{len(results)} resultado(s) encontrado(s):**")
+                        
+                        for i, chunk in enumerate(results):
+                            with st.expander(f"Resultado {i+1} (Chunk {chunk.chunk_index})", expanded=False):
+                                st.write(chunk.content[:500] + "..." if len(chunk.content) > 500 else chunk.content)
+                                st.caption(f"Tokens: {chunk.token_count} | Posição: {chunk.start_position}-{chunk.end_position}")
+                    else:
+                        st.info("Nenhum resultado encontrado.")
+        else:
+            st.info("Nenhum documento disponível para busca.")
 
 def render_chat_interface():
     """Renderiza interface de chat"""
@@ -219,444 +262,766 @@ def render_chat_interface():
         st.warning("⚠️ Nenhum modelo carregado. Carregue um modelo primeiro.")
         return
     
-    # Configurações de chat
-    with st.expander("⚙️ Configurações de Geração"):
+    # Configurações do chat
+    with st.expander("⚙️ Configurações de Geração", expanded=False):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1)
-            top_p = st.slider("Top-p", 0.1, 1.0, 0.9, 0.05)
+            temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1, 
+                                   help="Controla criatividade (maior = mais criativo)")
+            max_tokens = st.slider("Max Tokens", 50, 2048, 512, 50,
+                                 help="Máximo de tokens na resposta")
         
         with col2:
-            top_k = st.slider("Top-k", 1, 100, 50, 1)
-            max_tokens = st.slider("Max Tokens", 50, 2048, 512, 50)
+            top_p = st.slider("Top-p", 0.1, 1.0, 0.9, 0.1,
+                            help="Nucleus sampling")
+            top_k = st.slider("Top-k", 1, 100, 50, 1,
+                            help="Top-k sampling")
         
         with col3:
-            repetition_penalty = st.slider("Repetition Penalty", 1.0, 2.0, 1.1, 0.1)
-    
-    # Seleção de modo
-    chat_mode = st.radio(
-        "Modo de Chat:",
-        ["🤖 Modelo Único", "⚔️ Duelo de Modelos"],
-        horizontal=True
-    )
-    
-    if chat_mode == "🤖 Modelo Único":
-        render_single_chat(loaded_models, temperature, top_p, top_k, max_tokens, repetition_penalty)
-    else:
-        render_dual_chat(loaded_models, temperature, top_p, top_k, max_tokens, repetition_penalty)
-
-def render_single_chat(loaded_models, temperature, top_p, top_k, max_tokens, repetition_penalty):
-    """Renderiza chat com modelo único"""
-    
-    # Seleção de modelo
-    selected_model = st.selectbox("Selecione o modelo:", loaded_models, key="single_model")
-    
-    # Histórico de chat
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    
-    # Exibir histórico
-    chat_container = st.container()
-    with chat_container:
-        for i, message in enumerate(st.session_state.chat_history):
-            if message['role'] == 'user':
-                st.chat_message("user").write(message['content'])
-            else:
-                with st.chat_message("assistant"):
-                    st.write(f"**{message['model']}:**")
-                    st.write(message['content'])
-                    if 'metrics' in message:
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Tokens/s", f"{message['metrics']['tokens_per_second']:.1f}")
-                        with col2:
-                            st.metric("Tempo", f"{message['metrics']['response_time']:.1f}s")
-                        with col3:
-                            st.metric("Tokens", message['metrics']['total_tokens'])
-    
-    # Input de mensagem
-    user_input = st.chat_input("Digite sua mensagem...")
-    
-    if user_input:
-        # Adicionar mensagem do usuário
-        st.session_state.chat_history.append({
-            'role': 'user',
-            'content': user_input,
-            'timestamp': datetime.now()
-        })
-        
-        # Gerar resposta
-        with st.spinner("Gerando resposta..."):
-            start_time = time.time()
-            
-            response = st.session_state.chat_manager.generate_response(
-                selected_model,
-                user_input,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                max_tokens=max_tokens,
-                repetition_penalty=repetition_penalty
+            chat_mode = st.radio(
+                "Modo de Chat:",
+                ["🤖 Modelo Único", "⚔️ Duelo de Modelos"],
+                help="Escolha entre chat com um modelo ou comparação"
             )
-            
-            end_time = time.time()
-            response_time = end_time - start_time
-            
-            if response:
-                # Calcular métricas
-                tokens_per_second = len(response.split()) / response_time if response_time > 0 else 0
-                
-                # Adicionar resposta ao histórico
-                st.session_state.chat_history.append({
-                    'role': 'assistant',
-                    'content': response,
-                    'model': selected_model,
-                    'timestamp': datetime.now(),
-                    'metrics': {
-                        'response_time': response_time,
-                        'tokens_per_second': tokens_per_second,
-                        'total_tokens': len(response.split())
-                    }
-                })
-                
-                st.rerun()
-            else:
-                st.error("❌ Erro ao gerar resposta")
-    
-    # Controles do chat
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🗑️ Limpar Chat"):
-            st.session_state.chat_history = []
-            st.rerun()
-    
-    with col2:
-        if st.button("💾 Salvar Sessão"):
-            save_chat_session()
-    
-    with col3:
-        if st.button("📊 Ver Métricas"):
-            show_chat_metrics()
-
-def render_dual_chat(loaded_models, temperature, top_p, top_k, max_tokens, repetition_penalty):
-    """Renderiza chat com duelo de modelos"""
-    
-    if len(loaded_models) < 2:
-        st.warning("⚠️ Carregue pelo menos 2 modelos para o modo duelo.")
-        return
     
     # Seleção de modelos
-    col1, col2 = st.columns(2)
+    if chat_mode == "🤖 Modelo Único":
+        selected_model = st.selectbox("Modelo:", loaded_models, key="single_model")
+        models_to_use = [selected_model]
+    else:
+        models_to_use = st.multiselect(
+            "Modelos para comparar:",
+            loaded_models,
+            default=loaded_models[:2] if len(loaded_models) >= 2 else loaded_models,
+            key="comparison_models"
+        )
+        
+        if len(models_to_use) < 2:
+            st.warning("⚠️ Selecione pelo menos 2 modelos para comparação")
+            return
+    
+    # Gerenciamento de sessões
+    st.write("**Sessões de Chat:**")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
     with col1:
-        model1 = st.selectbox("Modelo 1:", loaded_models, key="dual_model1")
+        session_name = st.text_input("Nome da nova sessão:", 
+                                   value=f"Chat_{datetime.now().strftime('%Y%m%d_%H%M')}")
+    
     with col2:
-        model2 = st.selectbox("Modelo 2:", [m for m in loaded_models if m != model1], key="dual_model2")
-    
-    # Histórico de duelo
-    if 'dual_history' not in st.session_state:
-        st.session_state.dual_history = []
-    
-    # Exibir histórico
-    for i, exchange in enumerate(st.session_state.dual_history):
-        st.chat_message("user").write(exchange['user_input'])
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            with st.chat_message("assistant"):
-                st.write(f"**{exchange['model1']}:**")
-                st.write(exchange['response1'])
-                if 'metrics1' in exchange:
-                    st.caption(f"⏱️ {exchange['metrics1']['response_time']:.1f}s | 🚀 {exchange['metrics1']['tokens_per_second']:.1f} t/s")
-        
-        with col2:
-            with st.chat_message("assistant"):
-                st.write(f"**{exchange['model2']}:**")
-                st.write(exchange['response2'])
-                if 'metrics2' in exchange:
-                    st.caption(f"⏱️ {exchange['metrics2']['response_time']:.1f}s | 🚀 {exchange['metrics2']['tokens_per_second']:.1f} t/s")
-        
-        # Avaliação comparativa
-        if 'evaluation' in exchange:
-            st.info(f"🏆 Vencedor: {exchange['evaluation']['winner']} (Confiança: {exchange['evaluation']['confidence']:.1%})")
-    
-    # Input de mensagem
-    user_input = st.chat_input("Digite sua mensagem para ambos os modelos...")
-    
-    if user_input:
-        with st.spinner("Gerando respostas..."):
-            # Gerar respostas de ambos os modelos
-            start_time1 = time.time()
-            response1 = st.session_state.chat_manager.generate_response(
-                model1, user_input, temperature=temperature, top_p=top_p, 
-                top_k=top_k, max_tokens=max_tokens, repetition_penalty=repetition_penalty
-            )
-            end_time1 = time.time()
-            
-            start_time2 = time.time()
-            response2 = st.session_state.chat_manager.generate_response(
-                model2, user_input, temperature=temperature, top_p=top_p,
-                top_k=top_k, max_tokens=max_tokens, repetition_penalty=repetition_penalty
-            )
-            end_time2 = time.time()
-            
-            if response1 and response2:
-                # Calcular métricas
-                metrics1 = {
-                    'response_time': end_time1 - start_time1,
-                    'tokens_per_second': len(response1.split()) / (end_time1 - start_time1) if (end_time1 - start_time1) > 0 else 0,
-                    'total_tokens': len(response1.split())
-                }
-                
-                metrics2 = {
-                    'response_time': end_time2 - start_time2,
-                    'tokens_per_second': len(response2.split()) / (end_time2 - start_time2) if (end_time2 - start_time2) > 0 else 0,
-                    'total_tokens': len(response2.split())
-                }
-                
-                # Avaliação automática
-                evaluation = st.session_state.model_evaluator.compare_responses(
-                    user_input, response1, response2, model1, model2
-                )
-                
-                # Adicionar ao histórico
-                st.session_state.dual_history.append({
-                    'user_input': user_input,
-                    'model1': model1,
-                    'model2': model2,
-                    'response1': response1,
-                    'response2': response2,
-                    'metrics1': metrics1,
-                    'metrics2': metrics2,
-                    'evaluation': evaluation,
-                    'timestamp': datetime.now()
-                })
-                
+        if st.button("➕ Nova Sessão"):
+            if session_name:
+                session_type = "comparison" if chat_mode == "⚔️ Duelo de Modelos" else "single"
+                session_id = chat_manager.create_session(session_name, session_type)
+                st.session_state.current_session = session_id
+                st.success(f"✅ Sessão '{session_name}' criada!")
                 st.rerun()
-            else:
-                st.error("❌ Erro ao gerar uma ou ambas as respostas")
-    
-    # Controles do duelo
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🗑️ Limpar Duelo"):
-            st.session_state.dual_history = []
-            st.rerun()
-    
-    with col2:
-        if st.button("💾 Salvar Duelo"):
-            save_dual_session()
     
     with col3:
-        if st.button("📊 Comparar Modelos"):
-            show_model_comparison()
+        sessions = chat_manager.list_sessions()
+        if sessions:
+            session_options = {f"{s['name']} ({s['id'][:8]})": s['id'] for s in sessions}
+            selected_session_key = st.selectbox("Carregar sessão:", 
+                                               options=list(session_options.keys()),
+                                               key="session_selector")
+            if selected_session_key:
+                st.session_state.current_session = session_options[selected_session_key]
+    
+    # Interface de chat
+    if 'current_session' in st.session_state:
+        session_id = st.session_state.current_session
+        session_data = chat_manager.get_session(session_id)
+        
+        if session_data:
+            st.write(f"**Sessão Ativa:** {session_data['name']}")
+            
+            # Histórico de mensagens
+            st.write("**Histórico:**")
+            chat_container = st.container()
+            
+            with chat_container:
+                for message in session_data['messages']:
+                    if message['role'] == 'user':
+                        st.chat_message("user").write(message['content'])
+                    elif message['role'] == 'assistant':
+                        with st.chat_message("assistant"):
+                            st.write(f"**{message['model_name']}:**")
+                            st.write(message['content'])
+                            
+                            # Mostrar métricas se disponíveis
+                            if message.get('metadata'):
+                                with st.expander("📊 Métricas", expanded=False):
+                                    metrics = message['metadata']
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Tokens/seg", f"{metrics.get('tokens_per_second', 0):.1f}")
+                                    with col2:
+                                        st.metric("Tempo (s)", f"{metrics.get('generation_time', 0):.2f}")
+                                    with col3:
+                                        st.metric("Tokens", metrics.get('tokens_generated', 0))
+            
+            # Input de nova mensagem
+            user_input = st.chat_input("Digite sua mensagem...")
+            
+            if user_input:
+                # Mostrar mensagem do usuário imediatamente
+                st.chat_message("user").write(user_input)
+                
+                # Gerar respostas
+                with st.spinner("🤔 Gerando resposta..."):
+                    try:
+                        if chat_mode == "🤖 Modelo Único":
+                            result = chat_manager.send_message(
+                                session_id=session_id,
+                                content=user_input,
+                                model_name=models_to_use[0],
+                                temperature=temperature,
+                                max_tokens=max_tokens
+                            )
+                            
+                            # Mostrar resposta
+                            with st.chat_message("assistant"):
+                                st.write(f"**{models_to_use[0]}:**")
+                                st.write(result['message']['content'])
+                                
+                                with st.expander("📊 Métricas", expanded=False):
+                                    metrics = result['metrics']
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("Tokens/seg", f"{metrics['tokens_per_second']:.1f}")
+                                    with col2:
+                                        st.metric("Tempo (s)", f"{metrics['generation_time']:.2f}")
+                                    with col3:
+                                        st.metric("Tokens", metrics['tokens_generated'])
+                        
+                        else:  # Duelo de modelos
+                            result = chat_manager.compare_models(
+                                session_id=session_id,
+                                content=user_input,
+                                model_names=models_to_use,
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                                top_p=top_p,
+                                top_k=top_k
+                            )
+                            
+                            # Mostrar respostas lado a lado
+                            cols = st.columns(len(models_to_use))
+                            
+                            for i, model_name in enumerate(models_to_use):
+                                with cols[i]:
+                                    with st.chat_message("assistant"):
+                                        st.write(f"**{model_name}:**")
+                                        
+                                        if 'error' in result['responses'][model_name]:
+                                            st.error(f"Erro: {result['responses'][model_name]['error']}")
+                                        else:
+                                            response_data = result['responses'][model_name]
+                                            st.write(response_data['message']['content'])
+                                            
+                                            with st.expander("📊 Métricas", expanded=False):
+                                                metrics = response_data['metrics']
+                                                st.metric("Tokens/seg", f"{metrics['tokens_per_second']:.1f}")
+                                                st.metric("Tempo (s)", f"{metrics['generation_time']:.2f}")
+                                                st.metric("Tokens", metrics['tokens_generated'])
+                        
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Erro ao gerar resposta: {e}")
+            
+            # Ações da sessão
+            st.write("**Ações:**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("🔄 Reiniciar Sessão"):
+                    # Criar nova sessão com mesmo nome
+                    new_session_id = chat_manager.create_session(
+                        f"{session_data['name']}_novo",
+                        session_data['session_type']
+                    )
+                    st.session_state.current_session = new_session_id
+                    st.rerun()
+            
+            with col2:
+                if st.button("💾 Exportar JSON"):
+                    filepath = chat_manager.export_session(session_id, "json")
+                    if filepath:
+                        st.success(f"✅ Exportado para: {filepath}")
+            
+            with col3:
+                if st.button("📄 Exportar JSONL"):
+                    filepath = chat_manager.export_session(session_id, "jsonl")
+                    if filepath:
+                        st.success(f"✅ Exportado para: {filepath}")
+            
+            with col4:
+                if st.button("🗑️ Deletar Sessão", type="secondary"):
+                    if st.session_state.get('confirm_delete'):
+                        chat_manager.delete_session(session_id)
+                        if 'current_session' in st.session_state:
+                            del st.session_state.current_session
+                        st.success("✅ Sessão deletada!")
+                        st.rerun()
+                    else:
+                        st.session_state.confirm_delete = True
+                        st.warning("⚠️ Clique novamente para confirmar")
 
-def save_chat_session():
-    """Salva sessão de chat"""
-    if 'chat_history' in st.session_state and st.session_state.chat_history:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"chat_session_{timestamp}.json"
-        
-        session_data = {
-            'timestamp': timestamp,
-            'messages': st.session_state.chat_history,
-            'type': 'single_chat'
-        }
-        
-        # Salvar em data/sessions/
-        sessions_dir = Path("data/sessions")
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        
-        with open(sessions_dir / filename, 'w', encoding='utf-8') as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2, default=str)
-        
-        st.success(f"✅ Sessão salva como {filename}")
-
-def save_dual_session():
-    """Salva sessão de duelo"""
-    if 'dual_history' in st.session_state and st.session_state.dual_history:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"dual_session_{timestamp}.json"
-        
-        session_data = {
-            'timestamp': timestamp,
-            'exchanges': st.session_state.dual_history,
-            'type': 'dual_chat'
-        }
-        
-        # Salvar em data/sessions/
-        sessions_dir = Path("data/sessions")
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        
-        with open(sessions_dir / filename, 'w', encoding='utf-8') as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2, default=str)
-        
-        st.success(f"✅ Duelo salvo como {filename}")
-
-def show_chat_metrics():
-    """Exibe métricas do chat"""
-    if 'chat_history' not in st.session_state or not st.session_state.chat_history:
-        st.info("Nenhuma métrica disponível ainda.")
+def render_metrics_dashboard():
+    """Renderiza dashboard de métricas"""
+    st.subheader("📊 Dashboard de Métricas")
+    
+    chat_manager = st.session_state.chat_manager
+    metrics_summary = chat_manager.get_metrics_summary()
+    
+    if not metrics_summary:
+        st.info("📈 Nenhuma métrica disponível. Inicie um chat para gerar dados.")
         return
-    
-    # Filtrar apenas mensagens do assistente com métricas
-    assistant_messages = [
-        msg for msg in st.session_state.chat_history 
-        if msg['role'] == 'assistant' and 'metrics' in msg
-    ]
-    
-    if not assistant_messages:
-        st.info("Nenhuma métrica disponível ainda.")
-        return
-    
-    # Criar DataFrame para análise
-    metrics_data = []
-    for msg in assistant_messages:
-        metrics_data.append({
-            'modelo': msg['model'],
-            'tempo_resposta': msg['metrics']['response_time'],
-            'tokens_por_segundo': msg['metrics']['tokens_per_second'],
-            'total_tokens': msg['metrics']['total_tokens'],
-            'timestamp': msg['timestamp']
-        })
-    
-    df = pd.DataFrame(metrics_data)
     
     # Métricas gerais
     col1, col2, col3, col4 = st.columns(4)
     
+    total_generations = sum(data['total_generations'] for data in metrics_summary.values())
+    total_tokens = sum(data['total_tokens'] for data in metrics_summary.values())
+    avg_speed = sum(data['avg_tokens_per_second'] for data in metrics_summary.values()) / len(metrics_summary)
+    
     with col1:
-        st.metric("Total de Respostas", len(df))
-    
+        st.metric("Total de Gerações", total_generations)
     with col2:
-        st.metric("Tempo Médio", f"{df['tempo_resposta'].mean():.1f}s")
-    
+        st.metric("Total de Tokens", f"{total_tokens:,}")
     with col3:
-        st.metric("Tokens/s Médio", f"{df['tokens_por_segundo'].mean():.1f}")
-    
+        st.metric("Velocidade Média", f"{avg_speed:.1f} tok/s")
     with col4:
-        st.metric("Total de Tokens", df['total_tokens'].sum())
+        st.metric("Modelos Ativos", len(metrics_summary))
     
-    # Gráficos
+    # Gráficos comparativos
     col1, col2 = st.columns(2)
     
     with col1:
-        # Gráfico de tempo de resposta ao longo do tempo
-        fig_time = px.line(
-            df, x='timestamp', y='tempo_resposta', color='modelo',
-            title="Tempo de Resposta ao Longo do Tempo",
-            labels={'tempo_resposta': 'Tempo (s)', 'timestamp': 'Horário'}
+        # Gráfico de velocidade por modelo
+        models = list(metrics_summary.keys())
+        speeds = [data['avg_tokens_per_second'] for data in metrics_summary.values()]
+        
+        fig_speed = go.Figure(data=[
+            go.Bar(x=models, y=speeds, name="Tokens/segundo")
+        ])
+        fig_speed.update_layout(
+            title="Velocidade de Geração por Modelo",
+            xaxis_title="Modelo",
+            yaxis_title="Tokens por Segundo"
         )
-        st.plotly_chart(fig_time, use_container_width=True)
+        st.plotly_chart(fig_speed, use_container_width=True)
     
     with col2:
-        # Gráfico de tokens por segundo
-        fig_tokens = px.line(
-            df, x='timestamp', y='tokens_por_segundo', color='modelo',
-            title="Velocidade de Geração (Tokens/s)",
-            labels={'tokens_por_segundo': 'Tokens/s', 'timestamp': 'Horário'}
-        )
-        st.plotly_chart(fig_tokens, use_container_width=True)
+        # Gráfico de uso por modelo
+        generations = [data['total_generations'] for data in metrics_summary.values()]
+        
+        fig_usage = go.Figure(data=[
+            go.Pie(labels=models, values=generations, name="Uso")
+        ])
+        fig_usage.update_layout(title="Distribuição de Uso por Modelo")
+        st.plotly_chart(fig_usage, use_container_width=True)
+    
+    # Tabela detalhada
+    st.write("**Métricas Detalhadas:**")
+    
+    metrics_df = pd.DataFrame([
+        {
+            'Modelo': model,
+            'Gerações': data['total_generations'],
+            'Tokens Totais': data['total_tokens'],
+            'Velocidade Média (tok/s)': f"{data['avg_tokens_per_second']:.1f}",
+            'Tempo Médio (s)': f"{data['avg_generation_time']:.2f}",
+            'Tamanho Médio Resposta': f"{data['avg_response_length']:.0f}"
+        }
+        for model, data in metrics_summary.items()
+    ])
+    
+    st.dataframe(metrics_df, use_container_width=True)
 
-def show_model_comparison():
-    """Exibe comparação entre modelos no duelo"""
-    if 'dual_history' not in st.session_state or not st.session_state.dual_history:
-        st.info("Nenhum duelo realizado ainda.")
-        return
+def render_performance_monitor():
+    """Renderiza monitor de performance em tempo real"""
+    st.subheader("⚡ Monitor de Performance")
     
-    # Analisar resultados dos duelos
-    model1_wins = 0
-    model2_wins = 0
-    ties = 0
+    # Placeholder para métricas em tempo real
+    metrics_placeholder = st.empty()
     
-    model1_name = None
-    model2_name = None
+    # Simular métricas em tempo real (seria conectado ao sistema real)
+    import psutil
+    import torch
     
-    for exchange in st.session_state.dual_history:
-        if 'evaluation' in exchange:
-            model1_name = exchange['model1']
-            model2_name = exchange['model2']
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # CPU
+    cpu_percent = psutil.cpu_percent(interval=1)
+    with col1:
+        st.metric("CPU", f"{cpu_percent:.1f}%")
+    
+    # RAM
+    memory = psutil.virtual_memory()
+    with col2:
+        st.metric("RAM", f"{memory.percent:.1f}%", 
+                 f"{memory.used / 1024**3:.1f}GB / {memory.total / 1024**3:.1f}GB")
+    
+    # GPU (se disponível)
+    if torch.cuda.is_available():
+        gpu_memory = torch.cuda.memory_allocated() / 1024**3
+        gpu_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        gpu_percent = (gpu_memory / gpu_total) * 100
+        
+        with col3:
+            st.metric("GPU Memory", f"{gpu_percent:.1f}%",
+                     f"{gpu_memory:.1f}GB / {gpu_total:.1f}GB")
+        with col4:
+            st.metric("GPU Temp", "N/A")  # Seria obtido do sistema
+    else:
+        with col3:
+            st.metric("GPU", "Não disponível")
+        with col4:
+            st.metric("GPU Temp", "N/A")
+    
+    # Gráfico de uso ao longo do tempo (simulado)
+    if 'performance_history' not in st.session_state:
+        st.session_state.performance_history = []
+    
+    # Adicionar ponto atual
+    current_time = datetime.now()
+    st.session_state.performance_history.append({
+        'time': current_time,
+        'cpu': cpu_percent,
+        'memory': memory.percent,
+        'gpu': gpu_percent if torch.cuda.is_available() else 0
+    })
+    
+    # Manter apenas últimos 50 pontos
+    if len(st.session_state.performance_history) > 50:
+        st.session_state.performance_history = st.session_state.performance_history[-50:]
+    
+    # Criar gráfico
+    if len(st.session_state.performance_history) > 1:
+        df = pd.DataFrame(st.session_state.performance_history)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df['time'], y=df['cpu'], name='CPU %', line=dict(color='blue')))
+        fig.add_trace(go.Scatter(x=df['time'], y=df['memory'], name='RAM %', line=dict(color='green')))
+        if torch.cuda.is_available():
+            fig.add_trace(go.Scatter(x=df['time'], y=df['gpu'], name='GPU %', line=dict(color='red')))
+        
+        fig.update_layout(
+            title="Performance em Tempo Real",
+            xaxis_title="Tempo",
+            yaxis_title="Uso (%)",
+            yaxis=dict(range=[0, 100])
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+
+def render_evaluation_interface():
+    """Renderiza interface de avaliação avançada"""
+    st.subheader("🎯 Avaliação Avançada de Modelos")
+    
+    evaluator = st.session_state.model_evaluator
+    
+    # Tabs para diferentes funcionalidades de avaliação
+    eval_tab1, eval_tab2, eval_tab3, eval_tab4 = st.tabs([
+        "📝 Avaliação Manual", 
+        "⚔️ Comparação", 
+        "📊 Relatórios", 
+        "🏆 Rankings"
+    ])
+    
+    with eval_tab1:
+        st.write("**Avaliação Manual de Respostas**")
+        
+        # Seletor de modelo
+        chat_manager = st.session_state.chat_manager
+        loaded_models = list(chat_manager.model_loader.loaded_models.keys())
+        
+        if not loaded_models:
+            st.warning("⚠️ Nenhum modelo carregado. Carregue um modelo primeiro.")
+            return
+        
+        selected_model = st.selectbox("Modelo para avaliar:", loaded_models)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            prompt = st.text_area(
+                "Prompt:",
+                placeholder="Digite o prompt para o modelo...",
+                height=100
+            )
             
-            winner = exchange['evaluation']['winner']
-            if winner == model1_name:
-                model1_wins += 1
-            elif winner == model2_name:
-                model2_wins += 1
+            reference = st.text_area(
+                "Resposta de Referência:",
+                placeholder="Digite a resposta ideal/esperada...",
+                help="Resposta que você considera ideal para comparação",
+                height=100
+            )
+        
+        with col2:
+            generated = st.text_area(
+                "Resposta Gerada:",
+                placeholder="Cole aqui a resposta do modelo...",
+                height=200
+            )
+        
+        if st.button("🔍 Avaliar Resposta", key="evaluate_response"):
+            if prompt and reference and generated:
+                with st.spinner("Calculando métricas..."):
+                    result = evaluator.evaluate_response(
+                        model_name=selected_model,
+                        prompt=prompt,
+                        reference=reference,
+                        generated=generated
+                    )
+                    
+                    st.success("✅ Avaliação concluída!")
+                    
+                    # Mostrar métricas principais
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        bleu_score = result.metrics.get('bleu_avg', 0)
+                        st.metric("BLEU Score", f"{bleu_score:.3f}")
+                    
+                    with col2:
+                        rouge_score = result.metrics.get('rouge1_fmeasure', 0)
+                        st.metric("ROUGE-1 F1", f"{rouge_score:.3f}")
+                    
+                    with col3:
+                        semantic_sim = result.metrics.get('semantic_similarity', 0)
+                        st.metric("Similaridade Semântica", f"{semantic_sim:.3f}")
+                    
+                    with col4:
+                        coherence = result.metrics.get('coherence_score', 0)
+                        st.metric("Coerência", f"{coherence:.3f}")
+                    
+                    # Métricas detalhadas
+                    with st.expander("📊 Métricas Detalhadas", expanded=False):
+                        metrics_df = pd.DataFrame([
+                            {"Métrica": k, "Valor": f"{v:.4f}" if isinstance(v, float) else str(v)}
+                            for k, v in result.metrics.items()
+                            if not k.endswith('_error')
+                        ])
+                        st.dataframe(metrics_df, use_container_width=True)
             else:
-                ties += 1
+                st.error("❌ Preencha todos os campos para avaliar")
     
-    if model1_name and model2_name:
-        # Exibir resultados
+    with eval_tab2:
+        st.write("**Comparação Entre Modelos**")
+        
+        if len(loaded_models) < 2:
+            st.warning("⚠️ Carregue pelo menos 2 modelos para comparação.")
+            return
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            model_a = st.selectbox("Modelo A:", loaded_models, key="model_a")
+        
+        with col2:
+            model_b = st.selectbox("Modelo B:", 
+                                 [m for m in loaded_models if m != model_a], 
+                                 key="model_b")
+        
+        prompt_comp = st.text_area(
+            "Prompt para Comparação:",
+            placeholder="Digite o prompt que ambos os modelos devem responder...",
+            height=100
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"**Resposta do {model_a}:**")
+            response_a = st.text_area(
+                f"Resposta {model_a}:",
+                placeholder=f"Cole a resposta do {model_a}...",
+                height=150,
+                label_visibility="collapsed"
+            )
+        
+        with col2:
+            st.write(f"**Resposta do {model_b}:**")
+            response_b = st.text_area(
+                f"Resposta {model_b}:",
+                placeholder=f"Cole a resposta do {model_b}...",
+                height=150,
+                label_visibility="collapsed"
+            )
+        
+        reference_comp = st.text_area(
+            "Resposta de Referência (Opcional):",
+            placeholder="Resposta ideal para comparação (opcional)...",
+            height=80
+        )
+        
+        if st.button("⚔️ Comparar Modelos", key="compare_models"):
+            if prompt_comp and response_a and response_b:
+                with st.spinner("Comparando modelos..."):
+                    result = evaluator.compare_models(
+                        model_a=model_a,
+                        model_b=model_b,
+                        prompt=prompt_comp,
+                        response_a=response_a,
+                        response_b=response_b,
+                        reference=reference_comp if reference_comp else None
+                    )
+                    
+                    st.success("✅ Comparação concluída!")
+                    
+                    # Resultado da comparação
+                    if result.winner:
+                        winner_name = model_a if result.winner == "model_a" else model_b
+                        st.success(f"🏆 **Vencedor:** {winner_name} (Confiança: {result.confidence:.3f})")
+                    else:
+                        st.info("🤝 **Resultado:** Empate técnico")
+                    
+                    # Métricas lado a lado
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**Métricas - {model_a}:**")
+                        metrics_a_df = pd.DataFrame([
+                            {"Métrica": k, "Valor": f"{v:.4f}" if isinstance(v, float) else str(v)}
+                            for k, v in result.metrics_a.items()
+                            if not k.endswith('_error')
+                        ])
+                        st.dataframe(metrics_a_df, use_container_width=True)
+                    
+                    with col2:
+                        st.write(f"**Métricas - {model_b}:**")
+                        metrics_b_df = pd.DataFrame([
+                            {"Métrica": k, "Valor": f"{v:.4f}" if isinstance(v, float) else str(v)}
+                            for k, v in result.metrics_b.items()
+                            if not k.endswith('_error')
+                        ])
+                        st.dataframe(metrics_b_df, use_container_width=True)
+            else:
+                st.error("❌ Preencha pelo menos prompt e ambas as respostas")
+    
+    with eval_tab3:
+        st.write("**Relatórios de Avaliação**")
+        
+        # Seletor de modelo para relatório
+        all_models = list(set(r.model_name for r in evaluator.evaluation_history))
+        
+        if not all_models:
+            st.info("📝 Nenhuma avaliação realizada ainda.")
+            return
+        
+        report_model = st.selectbox(
+            "Modelo para relatório:",
+            ["Todos os Modelos"] + all_models,
+            key="report_model"
+        )
+        
+        model_filter = None if report_model == "Todos os Modelos" else report_model
+        
+        if st.button("📊 Gerar Relatório", key="generate_report"):
+            with st.spinner("Gerando relatório..."):
+                report = evaluator.generate_evaluation_report(model_filter)
+                
+                if "error" in report:
+                    st.error(f"❌ {report['error']}")
+                    return
+                
+                # Informações gerais
+                st.write("### 📋 Informações Gerais")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Total de Avaliações", report['total_evaluations'])
+                
+                with col2:
+                    if report['date_range']['start']:
+                        start_date = pd.to_datetime(report['date_range']['start']).strftime('%d/%m/%Y')
+                        st.metric("Primeira Avaliação", start_date)
+                
+                with col3:
+                    if report['date_range']['end']:
+                        end_date = pd.to_datetime(report['date_range']['end']).strftime('%d/%m/%Y')
+                        st.metric("Última Avaliação", end_date)
+                
+                # Estatísticas de métricas
+                if report['metric_statistics']:
+                    st.write("### 📊 Estatísticas de Métricas")
+                    
+                    metrics_data = []
+                    for metric, stats in report['metric_statistics'].items():
+                        metrics_data.append({
+                            'Métrica': metric,
+                            'Média': f"{stats['mean']:.4f}",
+                            'Desvio Padrão': f"{stats['std']:.4f}",
+                            'Mínimo': f"{stats['min']:.4f}",
+                            'Máximo': f"{stats['max']:.4f}",
+                            'Contagem': stats['count']
+                        })
+                    
+                    metrics_df = pd.DataFrame(metrics_data)
+                    st.dataframe(metrics_df, use_container_width=True)
+                
+                # Performance recente
+                if 'recent_performance' in report and 'average_metrics' in report['recent_performance']:
+                    st.write("### 📈 Performance Recente (7 dias)")
+                    recent_data = []
+                    for metric, value in report['recent_performance']['average_metrics'].items():
+                        recent_data.append({
+                            'Métrica': metric,
+                            'Média Recente': f"{value:.4f}"
+                        })
+                    
+                    if recent_data:
+                        recent_df = pd.DataFrame(recent_data)
+                        st.dataframe(recent_df, use_container_width=True)
+                
+                # Recomendações
+                if report['recommendations']:
+                    st.write("### 💡 Recomendações")
+                    for i, rec in enumerate(report['recommendations'], 1):
+                        st.write(f"{i}. {rec}")
+        
+        # Exportar resultados
+        st.write("### 📤 Exportar Resultados")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            export_format = st.selectbox("Formato:", ["JSON", "CSV"])
+        
+        with col2:
+            export_model = st.selectbox(
+                "Modelo:",
+                ["Todos"] + all_models,
+                key="export_model"
+            )
+        
+        if st.button("💾 Exportar", key="export_results"):
+            model_filter = None if export_model == "Todos" else export_model
+            
+            try:
+                filepath = evaluator.export_results(
+                    format=export_format.lower(),
+                    model_name=model_filter
+                )
+                st.success(f"✅ Resultados exportados para: {filepath}")
+                
+                # Oferecer download
+                with open(filepath, 'rb') as f:
+                    st.download_button(
+                        label="📥 Download",
+                        data=f.read(),
+                        file_name=Path(filepath).name,
+                        mime="application/json" if export_format == "JSON" else "text/csv"
+                    )
+            except Exception as e:
+                st.error(f"❌ Erro ao exportar: {e}")
+    
+    with eval_tab4:
+        st.write("**Rankings de Modelos**")
+        
+        if st.button("🏆 Atualizar Rankings", key="update_rankings"):
+            with st.spinner("Calculando rankings..."):
+                rankings = evaluator.get_model_rankings()
+                
+                if "message" in rankings:
+                    st.info(f"📝 {rankings['message']}")
+                    return
+                
+                st.write("### 🏆 Ranking de Modelos")
+                
+                ranking_data = []
+                for i, (model, stats) in enumerate(rankings['rankings'], 1):
+                    ranking_data.append({
+                        'Posição': i,
+                        'Modelo': model,
+                        'Score Médio': f"{stats['average_score']:.4f}",
+                        'Desvio Padrão': f"{stats['std_score']:.4f}",
+                        'Avaliações': stats['evaluation_count']
+                    })
+                
+                ranking_df = pd.DataFrame(ranking_data)
+                st.dataframe(ranking_df, use_container_width=True)
+                
+                # Gráfico de rankings
+                if len(ranking_data) > 1:
+                    fig = go.Figure(data=go.Bar(
+                        x=[r['Modelo'] for r in ranking_data],
+                        y=[float(r['Score Médio']) for r in ranking_data],
+                        text=[r['Score Médio'] for r in ranking_data],
+                        textposition='auto',
+                    ))
+                    
+                    fig.update_layout(
+                        title="Ranking de Modelos por Score Médio",
+                        xaxis_title="Modelo",
+                        yaxis_title="Score Médio",
+                        showlegend=False
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+        
+        # Estatísticas gerais
+        stats = evaluator.get_statistics()
+        
+        st.write("### 📊 Estatísticas Gerais")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Avaliações", stats['total_evaluations'])
+        
+        with col2:
+            st.metric("Total Comparações", stats['total_comparisons'])
+        
+        with col3:
+            st.metric("Modelos Únicos", stats['unique_models'])
+        
+        with col4:
+            st.metric("Métricas Disponíveis", len(stats['available_metrics']))
+        
+        # Status dos componentes
+        st.write("### 🔧 Status dos Componentes")
+        components = stats['components_status']
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric(f"Vitórias {model1_name}", model1_wins)
+            status = "✅ Ativo" if components['nltk'] else "❌ Inativo"
+            st.write(f"**NLTK (BLEU):** {status}")
         
         with col2:
-            st.metric(f"Vitórias {model2_name}", model2_wins)
+            status = "✅ Ativo" if components['rouge'] else "❌ Inativo"
+            st.write(f"**ROUGE:** {status}")
         
         with col3:
-            st.metric("Empates", ties)
-        
-        # Gráfico de pizza
-        fig = go.Figure(data=[go.Pie(
-            labels=[model1_name, model2_name, 'Empates'],
-            values=[model1_wins, model2_wins, ties],
-            hole=.3
-        )])
-        
-        fig.update_layout(title="Resultados do Duelo de Modelos")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Métricas de performance
-        metrics_data = []
-        for exchange in st.session_state.dual_history:
-            if 'metrics1' in exchange and 'metrics2' in exchange:
-                metrics_data.append({
-                    'modelo': exchange['model1'],
-                    'tempo_resposta': exchange['metrics1']['response_time'],
-                    'tokens_por_segundo': exchange['metrics1']['tokens_per_second']
-                })
-                metrics_data.append({
-                    'modelo': exchange['model2'],
-                    'tempo_resposta': exchange['metrics2']['response_time'],
-                    'tokens_por_segundo': exchange['metrics2']['tokens_per_second']
-                })
-        
-        if metrics_data:
-            df = pd.DataFrame(metrics_data)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Comparação de tempo de resposta
-                fig_time = px.box(
-                    df, x='modelo', y='tempo_resposta',
-                    title="Comparação de Tempo de Resposta"
-                )
-                st.plotly_chart(fig_time, use_container_width=True)
-            
-            with col2:
-                # Comparação de velocidade
-                fig_speed = px.box(
-                    df, x='modelo', y='tokens_por_segundo',
-                    title="Comparação de Velocidade (Tokens/s)"
-                )
-                st.plotly_chart(fig_speed, use_container_width=True)
+            status = "✅ Ativo" if components['sentence_transformers'] else "❌ Inativo"
+            st.write(f"**Sentence Transformers:** {status}")
 
 def main():
-    """Função principal da página de chat"""
+    """Função principal da página"""
+    st.set_page_config(
+        page_title="NeuralTrain Forge - Chat & Teste",
+        page_icon="💬",
+        layout="wide"
+    )
     
-    # Inicializar gerenciadores
-    init_chat_manager()
-    
-    # Título da página
     st.title("💬 Chat & Teste de Modelos")
     st.markdown("---")
     
+    # Inicializar chat manager
+    init_chat_manager()
+    
     # Tabs principais
-    tab1, tab2, tab3 = st.tabs(["🧠 Modelos", "📄 Documentos", "💬 Chat"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🤖 Modelos", 
+        "📄 Documentos",
+        "💬 Chat", 
+        "🎯 Avaliação",
+        "📊 Métricas", 
+        "⚡ Performance"
+    ])
     
     with tab1:
         render_model_selector()
@@ -666,6 +1031,15 @@ def main():
     
     with tab3:
         render_chat_interface()
+    
+    with tab4:
+        render_evaluation_interface()
+    
+    with tab5:
+        render_metrics_dashboard()
+    
+    with tab6:
+        render_performance_monitor()
 
 if __name__ == "__main__":
     main()
